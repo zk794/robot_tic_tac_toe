@@ -1,20 +1,31 @@
 
 
 class StateNode:
-    def __init__(self, state, turn):
+    def __init__(self, state, turn, action):
         self.state = state
         self.turn = turn
         # self.parent = parent
+
+        self.action = action # which spot is filled to get to this move from the last one
         self.final = self.isFinal() # 0 if draw, 1 if player 1 win, 2 if player 2 win, -1 if game not done
         self.children = []
         self.value = 0
 
     def isFinal(self):
         lines = [[0,1,2], [3,4,5], [6,7,8], [0,3,6], [1,4,7], [2,5,8], [0,4,8], [2,4,6]]
+        # for l in lines:
+        #     if self.state[l[0]] == 1 and self.state[l[1]] == 1 and self.state[l[2]] == 1:
+        #         return 1
+        #     if self.state[l[0]] == 2 and self.state[l[1]] == 2 and self.state[l[2]] == 2:
+        #         return 2
         for l in lines:
-            if self.state[l[0]] == 1 and self.state[l[1]] == 1 and self.state[l[2]] == 1:
+            row = [self.state[l[0]], self.state[l[1]], self.state[l[2]]]
+            count0 = row.count(0)
+            count1 = row.count(1)
+            count2 = row.count(2)
+            if count1 == 3:
                 return 1
-            if self.state[l[0]] == 2 and self.state[l[1]] == 2 and self.state[l[2]] == 2:
+            if count2 == 3:
                 return 2
 
         for e in self.state:
@@ -23,23 +34,22 @@ class StateNode:
         return 0 # draw
 
     def getChildren(self):
-        print(self.state)
         children = []
         if self.final < 0: # game not over, add children to list
             for i in range(9):
                 new_state = [x for x in self.state]
                 if (new_state[i] == 0):
                     new_state[i] = self.turn
-                    children.append(StateNode(new_state, (1, 2)[self.turn == 1], self))
+                    children.append(StateNode(new_state, (1, 2)[self.turn == 1], i))
 
         self.children = children
 
     # calculates value of current state
     def staticEval(self):
         if self.final == 1:
-            return 1000
+            return 10000
         if self.final == 2:
-            return -1000
+            return -10000
 
         lines = [[0,1,2], [3,4,5], [6,7,8], [0,3,6], [1,4,7], [2,5,8], [0,4,8], [2,4,6]]
         value = 0
@@ -60,32 +70,60 @@ class StateNode:
 
 class StateTree:
     def __init__(self, state, turn):
-        self.root = StateNode(state, 1)
+        self.root = StateNode(state, 1, None)
 
-    def minimax(self, state, depth):
-        if depth == 0 or state.final>=0:
-            state.value = state.staticEval()
-            return state.staticEval()
+    # fills values in decision tree
+    def minimax(self, node, depth):
+        if depth == 0 or node.final>=0:
+            node.value = node.staticEval()
+            # print(node.state, node.value)
+            return node.staticEval()
 
-        if state.turn == 1: # maximizing player
+        # if maximizing:
+        if node.turn == 1: # maximizing player
             maxEval = -10000
-            state.getChildren()
-            for child in state.children:
+            node.getChildren()
+            for child in node.children:
                 eval = self.minimax(child, depth-1)
                 maxEval = max(maxEval, eval)
-            state.value = maxEval
+            node.value = maxEval
+            # print(node.state, node.value)
             return maxEval
-
-        if state.turn == 2: # minimizing player
+        # else:
+        if node.turn == 2: # minimizing player
             minEval = 10000
-            state.getChildren()
-            for child in state.children:
+            node.getChildren()
+            for child in node.children:
                 eval = self.minimax(child, depth-1)
                 minEval = min(minEval, eval)
-            state.value = minEval
+            node.value = minEval
+            # print(node.state, node.value)
             return minEval
 
 
-turn0 = StateNode([0,0,0,0,0,0,0,0,0], 1, None)
-tree = StateTree()
-tree.root.getChildren()
+
+    # returns number of the space that the robot should put its chip in
+    def pickAction(self):
+        self.minimax(self.root, 3)
+        next_move = None
+        best_val = -10000
+        for node in self.root.children:
+            if node.value > best_val:
+                best_val = node.value
+                next_move = node
+        return next_move.action
+
+# turn0 = StateNode([0,0,0,0,0,0,0,0,0], 1, None)
+# tree0 = StateTree()
+tree1 = StateTree([1,1,2,0,0,2,0,0,0], 1)
+# tree.root.getChildren()
+
+print(tree1.pickAction())
+for ch in tree1.root.children:
+    print(ch.state, ch.value, ch.final)
+# print(tree2.pickAction())
+# for ch in tree2.root.children:
+#     print(ch.state, ch.value, ch.final)
+# print(tree3.pickAction())
+# for ch in tree3.root.children:
+#     print(ch.state, ch.value, ch.final)
