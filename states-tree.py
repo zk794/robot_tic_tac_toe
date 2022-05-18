@@ -4,8 +4,6 @@ class StateNode:
     def __init__(self, state, turn, action):
         self.state = state
         self.turn = turn
-        # self.parent = parent
-
         self.action = action # which spot is filled to get to this move from the last one
         self.final = self.isFinal() # 0 if draw, 1 if player 1 win, 2 if player 2 win, -1 if game not done
         self.children = []
@@ -13,11 +11,6 @@ class StateNode:
 
     def isFinal(self):
         lines = [[0,1,2], [3,4,5], [6,7,8], [0,3,6], [1,4,7], [2,5,8], [0,4,8], [2,4,6]]
-        # for l in lines:
-        #     if self.state[l[0]] == 1 and self.state[l[1]] == 1 and self.state[l[2]] == 1:
-        #         return 1
-        #     if self.state[l[0]] == 2 and self.state[l[1]] == 2 and self.state[l[2]] == 2:
-        #         return 2
         for l in lines:
             row = [self.state[l[0]], self.state[l[1]], self.state[l[2]]]
             count0 = row.count(0)
@@ -76,7 +69,6 @@ class StateTree:
     def minimax(self, node, depth):
         if depth == 0 or node.final>=0:
             node.value = node.staticEval()
-            # print(node.state, node.value)
             return node.staticEval()
 
         # if maximizing:
@@ -87,7 +79,6 @@ class StateTree:
                 eval = self.minimax(child, depth-1)
                 maxEval = max(maxEval, eval)
             node.value = maxEval
-            # print(node.state, node.value)
             return maxEval
         # else:
         if node.turn == 2: # minimizing player
@@ -97,7 +88,6 @@ class StateTree:
                 eval = self.minimax(child, depth-1)
                 minEval = min(minEval, eval)
             node.value = minEval
-            # print(node.state, node.value)
             return minEval
 
 
@@ -112,18 +102,3 @@ class StateTree:
                 best_val = node.value
                 next_move = node
         return next_move.action
-
-# turn0 = StateNode([0,0,0,0,0,0,0,0,0], 1, None)
-# tree0 = StateTree()
-tree1 = StateTree([1,1,2,0,0,2,0,0,0], 1)
-# tree.root.getChildren()
-
-print(tree1.pickAction())
-for ch in tree1.root.children:
-    print(ch.state, ch.value, ch.final)
-# print(tree2.pickAction())
-# for ch in tree2.root.children:
-#     print(ch.state, ch.value, ch.final)
-# print(tree3.pickAction())
-# for ch in tree3.root.children:
-#     print(ch.state, ch.value, ch.final)
