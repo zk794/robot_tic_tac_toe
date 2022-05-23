@@ -24,6 +24,11 @@ class ExecuteAction(object):
 
         self.aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_50)
         self.taking_to_tag = False
+        self.scanning = True
+        self.board_state = [0, 0, 0, 0, 0, 0, 0, 0, 0]
+        self.number_of_tags = 9
+        self.tags = [0, 1, 2, 3, 4, 5, 6, 7, 8]
+        self.next_tag = 0
 
         # Robot arm movement
         # set up ROS / OpenCV bridge
@@ -67,19 +72,8 @@ class ExecuteAction(object):
 
 
     def choose_next_action(self):
-        # This function fetches the converged q matrix and chooses 
-        # the action with the maximum reward for each state
-
-        actions = [] # in the case when there are multiple actions with the same reward
-        max_reward = max(self.q[self.state])
-        for action, reward in enumerate(self.q[self.state]):
-            if reward == max_reward:
-                actions.append(action)
-        next_action = np.random.choice(actions)
-        new_state = self.action_matrix[self.state].tolist().index(next_action)
-        self.state = new_state
-        self.object = self.actions[next_action]["object"]
-        self.tag = int(self.actions[next_action]["tag"])
+        # Choose the next action using the minimax algorithm and assign to self.next_tag
+        self.board_state[self.next_tag] = 1
         self.initialized = True
         return 
 
@@ -89,7 +83,28 @@ class ExecuteAction(object):
         if (not self.initialized):
             return
 
-        if (self.taking_to_tag): # When we have the dumbell and travelling to the tag
+        if (self.scanning): # Only switch to self.scanning once we have reached the initial position
+            img = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+
+            # turn the image into a grayscale
+            grayscale_image = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+            # search for tags from DICT_4X4_50 in a GRAYSCALE image
+            corners, ids, rejected_points = cv2.aruco.detectMarkers(grayscale_image, self.aruco_dict)
+            
+            if len(ids) < self.number_of_tags:
+                self.number_of_tags -= 1
+                for tag in self.tags:
+                    if [tag] not in ids:
+                        self.board_state[tag] = 2
+                        self.tags.remove(tag)
+                        break
+            
+            self.initialized = False
+            self.choose_next_action()
+            self.scanning = False
+            self.taking_to_tag = False
+        elif (self.taking_to_tag): # When we have the dumbell and travelling to the tag
             # take the ROS message with the image and turn it into a format cv2 can use
             img = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
 
@@ -117,30 +132,21 @@ class ExecuteAction(object):
                     my_twist = Twist(linear=Vector3(0.05, 0, 0), angular=Vector3(0, 0, 0.001*(-cx + 160)))
                     self.robot_movement_pub.publish(my_twist)
         else: # looking for object
-            # converts the incoming ROS message to OpenCV format and HSV (hue, saturation, value)
             image = self.bridge.imgmsg_to_cv2(msg,desired_encoding='bgr8')
             hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
             # Color ranges for the 3 dumbells
-            lower_blue = np.array([90, 60, 60]) 
-            upper_blue = np.array([90, 255, 255]) 
+            # lower_blue = np.array([90, 60, 60]) 
+            # upper_blue = np.array([90, 255, 255]) 
 
             lower_green = np.array([30, 60, 60]) 
             upper_green = np.array([45, 255, 255])
 
-            lower_pink = np.array([120, 60, 60]) 
-            upper_pink = np.array([170, 255, 255])
+            # lower_pink = np.array([120, 60, 60]) 
+            # upper_pink = np.array([170, 255, 255])
 
             # this erases all pixels that aren't the right color 
-            # (the default as blue doesn't do anything except avoid an error when the color hasn't been initialized yet) 
-            mask = cv2.inRange(hsv, lower_blue, upper_blue)
-            
-            if self.object == "pink":
-                mask = cv2.inRange(hsv, lower_pink, upper_pink)
-            elif self.object == "green":
-                mask = cv2.inRange(hsv, lower_green, upper_green)
-            else:
-                mask = cv2.inRange(hsv, lower_blue, upper_blue)
+            mask = cv2.inRange(hsv, lower_green, upper_green)
 
             # using moments() function, the center of the pixels is determined
             M = cv2.moments(mask)
@@ -155,7 +161,7 @@ class ExecuteAction(object):
                 cv2.circle(image, (cx, cy), 20, (0,0,255), -1)
                 my_twist = Twist(linear=Vector3(0.1, 0, 0), angular=Vector3(0, 0, 0.002*(-cx + 160)))                                
                 self.robot_movement_pub.publish(my_twist)
-            #turns until it finds the fixels of the right color
+            #turns until it finds the pixels of the right color
             elif self.robotpos == 0:
                 my_twist = Twist(linear=Vector3(0, 0, 0), angular=Vector3(0, 0, 0.05))                                
                 self.robot_movement_pub.publish(my_twist)
