@@ -15,6 +15,8 @@ from sensor_msgs.msg import LaserScan
 import moveit_commander
 import math
 
+import states_tree
+
 class ExecuteAction(object):
     def __init__(self):
         # Initialize this node
@@ -30,6 +32,8 @@ class ExecuteAction(object):
         self.tags = [0, 1, 2, 3, 4, 5, 6, 7, 8]
         self.next_tag = 0
 
+        self.depth = 3 # depth for minimax search
+
         # Robot arm movement
         # set up ROS / OpenCV bridge
         self.bridge = cv_bridge.CvBridge()
@@ -38,11 +42,11 @@ class ExecuteAction(object):
         cv2.namedWindow("window", 1)
         # Global variable to control for distance to object
         self.robotpos = 0
-                
-        #set the robot arm and gripper to its default state 
+
+        # set the robot arm and gripper to its default state
         self.move_group_arm = moveit_commander.MoveGroupCommander("arm")
         self.move_group_gripper = moveit_commander.MoveGroupCommander("gripper")
-                
+
         arm_joint_goal = [0.0, 0.0, 0.0, 0.0]
         self.move_group_arm.go(arm_joint_goal)
         self.move_group_arm.stop()
@@ -54,7 +58,7 @@ class ExecuteAction(object):
         rospy.sleep(2)
 
         # Setup publishers and subscribers
- 
+
         # subscribe to the robot's RGB camera data stream
         self.image_sub = rospy.Subscriber('camera/rgb/image_raw',
                 Image, self.image_callback)
@@ -73,11 +77,13 @@ class ExecuteAction(object):
 
     def choose_next_action(self):
         # Choose the next action using the minimax algorithm and assign to self.next_tag
+        decision_tree = StateTree(self.board_state, 1)
+        self.next_tag = decision_tree.pickAction(self.depth)
         self.board_state[self.next_tag] = 1
         self.initialized = True
-        return 
+        return
 
-    
+
     def image_callback(self, msg):
 
         if (not self.initialized):
@@ -91,7 +97,7 @@ class ExecuteAction(object):
 
             # search for tags from DICT_4X4_50 in a GRAYSCALE image
             corners, ids, rejected_points = cv2.aruco.detectMarkers(grayscale_image, self.aruco_dict)
-            
+
             if len(ids) < self.number_of_tags:
                 self.number_of_tags -= 1
                 for tag in self.tags:
@@ -99,7 +105,7 @@ class ExecuteAction(object):
                         self.board_state[tag] = 2
                         self.tags.remove(tag)
                         break
-            
+
             self.initialized = False
             self.choose_next_action()
             self.scanning = False
@@ -113,11 +119,11 @@ class ExecuteAction(object):
 
             # search for tags from DICT_4X4_50 in a GRAYSCALE image
             corners, ids, rejected_points = cv2.aruco.detectMarkers(grayscale_image, self.aruco_dict)
-            
+
             if self.robotpos == 1: # Keep rotating until we see the tag we want
                 my_twist = Twist(linear=Vector3(0, 0, 0), angular=Vector3(0, 0, 0.1))
                 self.robot_movement_pub.publish(my_twist)
-               
+
             if (ids is not None) and [self.tag] in ids: # Only start moving when we see the tag we want
                 index_of_id = ids.tolist().index([self.tag])
                 sum_x = 0
@@ -136,21 +142,21 @@ class ExecuteAction(object):
             hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
             # Color ranges for the 3 dumbells
-            # lower_blue = np.array([90, 60, 60]) 
-            # upper_blue = np.array([90, 255, 255]) 
+            # lower_blue = np.array([90, 60, 60])
+            # upper_blue = np.array([90, 255, 255])
 
-            lower_green = np.array([30, 60, 60]) 
+            lower_green = np.array([30, 60, 60])
             upper_green = np.array([45, 255, 255])
 
-            # lower_pink = np.array([120, 60, 60]) 
+            # lower_pink = np.array([120, 60, 60])
             # upper_pink = np.array([170, 255, 255])
 
-            # this erases all pixels that aren't the right color 
+            # this erases all pixels that aren't the right color
             mask = cv2.inRange(hsv, lower_green, upper_green)
 
             # using moments() function, the center of the pixels is determined
             M = cv2.moments(mask)
-            
+
             if M['m00'] > 0 and self.robotpos == 0:
                 self.color = True
                 # center of the pixels in the image
@@ -159,11 +165,11 @@ class ExecuteAction(object):
 
                 #turns and moves towards the center of the pixels
                 cv2.circle(image, (cx, cy), 20, (0,0,255), -1)
-                my_twist = Twist(linear=Vector3(0.1, 0, 0), angular=Vector3(0, 0, 0.002*(-cx + 160)))                                
+                my_twist = Twist(linear=Vector3(0.1, 0, 0), angular=Vector3(0, 0, 0.002*(-cx + 160)))
                 self.robot_movement_pub.publish(my_twist)
             #turns until it finds the pixels of the right color
             elif self.robotpos == 0:
-                my_twist = Twist(linear=Vector3(0, 0, 0), angular=Vector3(0, 0, 0.05))                                
+                my_twist = Twist(linear=Vector3(0, 0, 0), angular=Vector3(0, 0, 0.05))
                 self.robot_movement_pub.publish(my_twist)
 
 
@@ -175,12 +181,12 @@ class ExecuteAction(object):
         if (self.taking_to_tag): # Taking to tag case
             for i in range (5):
                 r = data.ranges[-i]
-                l = data.ranges[i]               
-                if ((r <= 0.4 and r > 0.35) or (l <= 0.4 and l > 0.35)) and self.robotpos == 1: # If we are close enough to the AR tag                  
+                l = data.ranges[i]
+                if ((r <= 0.4 and r > 0.35) or (l <= 0.4 and l > 0.35)) and self.robotpos == 1: # If we are close enough to the AR tag
                     self.robotpos = 2
                     my_twist = Twist(linear=Vector3(0.0, 0, 0), angular=Vector3(0, 0, 0))
                     self.robot_movement_pub.publish(my_twist) # stop
-                    
+
                     # Put the dumbell down
                     arm_joint_goal = [0.0, 0.0, 0.0, 0.0]
                     self.move_group_arm.go(arm_joint_goal)
@@ -200,9 +206,9 @@ class ExecuteAction(object):
                     #drive back and start turning
                     my_twist = Twist(linear=Vector3(-0.2, 0, 0), angular=Vector3(0, 0, 0.6))
                     self.robot_movement_pub.publish(my_twist)
-                    
+
                     rospy.sleep(2)
-               
+
                     my_twist = Twist(linear=Vector3(0, 0, 0), angular=Vector3(0, 0, 0))
                     self.robot_movement_pub.publish(my_twist)
                     rospy.sleep(10)
@@ -213,24 +219,24 @@ class ExecuteAction(object):
                     self.choose_next_action()
                     self.taking_to_tag = False
                     rospy.sleep(2)
-        else: # When we're looking for dumbells 
+        else: # When we're looking for dumbells
             r = 0
             l = 0
             for i in range (10):
                 r = data.ranges[-i]
-                l = data.ranges[i]              
+                l = data.ranges[i]
                 if ((r <= 0.22 and r > 0.2) or (l <= 0.22 and l >0.2)) and self.robotpos == 0 and self.taking_to_tag == False and self.color == True:
                     #stops
                     self.robotpos = 1
                     my_twist = Twist(linear=Vector3(0.0, 0, 0), angular=Vector3(0, 0, 0))
                     self.robot_movement_pub.publish(my_twist)
-                    
+
                     #picks up dumbell
                     arm_joint_goal = [math.radians(min(r, l)), math.radians(20.0), 0.0, 0.0]
                     self.move_group_arm.go(arm_joint_goal)
                     self.move_group_arm.stop()
                     rospy.sleep(5)
-                                
+
                     gripper_joint_goal = [-0.01, 0.01]
                     self.move_group_gripper.go(gripper_joint_goal, wait=True)
                     self.move_group_gripper.stop()
@@ -243,7 +249,7 @@ class ExecuteAction(object):
                     # Moves back and starts turning
                     my_twist = Twist(linear=Vector3(-0.2, 0, 0), angular=Vector3(0, 0, 0.5))
                     self.robot_movement_pub.publish(my_twist)
-                   
+
                     rospy.sleep(1)
                     my_twist = Twist(linear=Vector3(0, 0, 0), angular=Vector3(0, 0, 0))
                     self.robot_movement_pub.publish(my_twist)
@@ -252,22 +258,22 @@ class ExecuteAction(object):
                     #start looking for AR tag
                     self.taking_to_tag = True
                     self.color = False
-              
-    
+
+
     def run(self):
         # Give time for all publishers to initialize
         rospy.sleep(3)
         # Choose the first action
         self.choose_next_action()
         rospy.spin()
-   
+
 
 if __name__ == "__main__":
     node = QAction()
     node.run()
 
 # Master Node
-#  - When scanning the board: 
+#  - When scanning the board:
 #     - If it sees the AR tag - assign 0
 #     - All of its own moves - stored as 1
 #     - All other tags that are not seen: assign 2
@@ -280,5 +286,5 @@ if __name__ == "__main__":
 # Execution Node:
 # - Receive the aciton
 # - Pick up the right dumbbell
-# - Move correctly to the AR tag and stick it 
+# - Move correctly to the AR tag and stick it
 # - Go back to the initial position and start scanning - use a flag to indicate the change of the state
