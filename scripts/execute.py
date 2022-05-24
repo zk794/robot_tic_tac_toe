@@ -27,6 +27,7 @@ class ExecuteAction(object):
         self.aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_50)
         self.taking_to_tag = False
         self.scanning = True
+        self.going_back = False
         self.board_state = [0, 0, 0, 0, 0, 0, 0, 0, 0]
         self.number_of_tags = 9
         self.tags = [0, 1, 2, 3, 4, 5, 6, 7, 8]
@@ -89,7 +90,34 @@ class ExecuteAction(object):
         if (not self.initialized):
             return
 
-        if (self.scanning): # Only switch to self.scanning once we have reached the initial position
+        if (self.going_back):
+            # take the ROS message with the image and turn it into a format cv2 can use
+            img = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+
+            # turn the image into a grayscale
+            grayscale_image = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+            # search for tags from DICT_4X4_50 in a GRAYSCALE image
+            corners, ids, rejected_points = cv2.aruco.detectMarkers(grayscale_image, self.aruco_dict)
+
+            if self.robotpos == 1: # Keep rotating until we see the tag we want
+                my_twist = Twist(linear=Vector3(0, 0, 0), angular=Vector3(0, 0, 0.1))
+                self.robot_movement_pub.publish(my_twist)
+
+            if (ids is not None) and [9] in ids: # Only start moving when we see the tag we want
+                index_of_id = ids.tolist().index([self.tag])
+                sum_x = 0
+                sum_y = 0
+                for i in range(4):
+                    sum_x += corners[index_of_id][0][i][0]
+                    sum_y += corners[index_of_id][0][i][1]
+                cx = sum_x / 4 # Find the center of the tag
+                cy = sum_y / 4
+
+                if self.robotpos == 1: # Robot will move until it's close enough to the tag
+                    my_twist = Twist(linear=Vector3(0.05, 0, 0), angular=Vector3(0, 0, 0.001*(-cx + 160)))
+                    self.robot_movement_pub.publish(my_twist)
+        elif (self.scanning): # Only switch to self.scanning once we have reached the initial position
             img = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
 
             # turn the image into a grayscale
@@ -177,7 +205,25 @@ class ExecuteAction(object):
 
         if (not self.initialized):
             return
+        if (self.going_back):
+            for i in range (5):
+                r = data.ranges[-i]
+                l = data.ranges[i]
+                if ((r <= 0.3 and r > 0.2) or (l <= 0.3 and l > 0.2)) and self.robotpos == 1: # If we are close enough to the AR tag
+                    self.robotpos = 2
+                    my_twist = Twist(linear=Vector3(0.0, 0, 0), angular=Vector3(0, 0, 0))
+                    self.robot_movement_pub.publish(my_twist) # stop
 
+                    # Turn 180 degrees
+                    my_twist = Twist(linear=Vector3(), angular=Vector3(0, 0, 0.7854)) 
+                    self.robot_movement_pub.publish(my_twist)
+                    # Turning time. Determined that 2.2 was better than 2 through trial and error
+                    rospy.sleep(2.2) 
+                    my_twist = Twist(linear=Vector3(), angular=Vector3())
+                    self.robot_movement_pub.publish(my_twist)
+
+                    self.scanning = True
+                    self.going_back = False
         if (self.taking_to_tag): # Taking to tag case
             for i in range (5):
                 r = data.ranges[-i]
