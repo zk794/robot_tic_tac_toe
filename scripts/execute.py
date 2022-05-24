@@ -12,10 +12,10 @@ from std_msgs.msg import Header
 from sensor_msgs.msg import Image
 from sensor_msgs.msg import LaserScan
 
-import moveit_commander
+# import moveit_commander
 import math
 
-import states_tree
+from states_tree import StateTree, StateNode
 
 class ExecuteAction(object):
     def __init__(self):
@@ -26,12 +26,14 @@ class ExecuteAction(object):
 
         self.aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_50)
         self.taking_to_tag = False
-        self.scanning = True
-        self.going_back = False
+        self.scanning = False
+        self.going_back = True
         self.board_state = [0, 0, 0, 0, 0, 0, 0, 0, 0]
         self.number_of_tags = 9
         self.tags = [0, 1, 2, 3, 4, 5, 6, 7, 8]
         self.next_tag = 0
+        self.tags_bool = [False for i in self.tags]
+        print("initializing")
 
         self.depth = 3 # depth for minimax search
 
@@ -40,23 +42,23 @@ class ExecuteAction(object):
         self.bridge = cv_bridge.CvBridge()
 
         # initalize the debugging window
-        cv2.namedWindow("window", 1)
+        # cv2.namedWindow("window", 1)
         # Global variable to control for distance to object
-        self.robotpos = 0
+        self.robotpos = 1 # should be 0
 
         # set the robot arm and gripper to its default state
-        self.move_group_arm = moveit_commander.MoveGroupCommander("arm")
-        self.move_group_gripper = moveit_commander.MoveGroupCommander("gripper")
+        # self.move_group_arm = moveit_commander.MoveGroupCommander("arm")
+        # self.move_group_gripper = moveit_commander.MoveGroupCommander("gripper")
 
-        arm_joint_goal = [0.0, 0.0, 0.0, 0.0]
-        self.move_group_arm.go(arm_joint_goal)
-        self.move_group_arm.stop()
-        rospy.sleep(5)
+        # arm_joint_goal = [0.0, 0.0, 0.0, 0.0]
+        # self.move_group_arm.go(arm_joint_goal)
+        # self.move_group_arm.stop()
+        # rospy.sleep(5)
 
-        gripper_joint_goal = [0.01, -0.01]
-        self.move_group_gripper.go(gripper_joint_goal)
-        self.move_group_gripper.stop()
-        rospy.sleep(2)
+        # gripper_joint_goal = [0.01, -0.01]
+        # self.move_group_gripper.go(gripper_joint_goal)
+        # self.move_group_gripper.stop()
+        # rospy.sleep(2)
 
         # Setup publishers and subscribers
 
@@ -72,7 +74,7 @@ class ExecuteAction(object):
         self.robot_movement_pub = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
 
         #setup global flags to be used when transitioning between movements
-        self.initialized = False
+        self.initialized = True
         self.color = False
 
 
@@ -82,15 +84,18 @@ class ExecuteAction(object):
         self.next_tag = decision_tree.pickAction(self.depth)
         self.board_state[self.next_tag] = 1
         self.initialized = True
+        print("chose next action {}".format(self.next_tag))
         return
 
 
     def image_callback(self, msg):
 
         if (not self.initialized):
+            print("Initializing...")
             return
 
         if (self.going_back):
+            print("Going back branch")
             # take the ROS message with the image and turn it into a format cv2 can use
             img = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
 
@@ -101,16 +106,16 @@ class ExecuteAction(object):
             corners, ids, rejected_points = cv2.aruco.detectMarkers(grayscale_image, self.aruco_dict)
 
             if self.robotpos == 1: # Keep rotating until we see the tag we want
-                my_twist = Twist(linear=Vector3(0, 0, 0), angular=Vector3(0, 0, 0.1))
+                my_twist = Twist(linear=Vector3(0, 0, 0), angular=Vector3(0, 0, 0.05))
                 self.robot_movement_pub.publish(my_twist)
 
             if (ids is not None) and [9] in ids: # Only start moving when we see the tag we want
-                index_of_id = ids.tolist().index([self.tag])
+                # index_of_id = ids.tolist().index([self.tag])
                 sum_x = 0
                 sum_y = 0
                 for i in range(4):
-                    sum_x += corners[index_of_id][0][i][0]
-                    sum_y += corners[index_of_id][0][i][1]
+                    sum_x += corners[0][0][i][0]
+                    sum_y += corners[0][0][i][1]
                 cx = sum_x / 4 # Find the center of the tag
                 cy = sum_y / 4
 
@@ -119,14 +124,23 @@ class ExecuteAction(object):
                     self.robot_movement_pub.publish(my_twist)
         elif (self.scanning): # Only switch to self.scanning once we have reached the initial position
             img = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
-
+            print("in the scanning branch")
             # turn the image into a grayscale
             grayscale_image = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
             # search for tags from DICT_4X4_50 in a GRAYSCALE image
             corners, ids, rejected_points = cv2.aruco.detectMarkers(grayscale_image, self.aruco_dict)
-
-            if len(ids) < self.number_of_tags:
+            # turn around to search for tags
+            for i in range(10):
+                my_twist = Twist(linear=Vector3(0, 0, 0), angular=Vector3(0, 0, 0.05))
+                self.robot_movement_pub.publish(my_twist)
+                rospy.sleep(1)
+                my_twist = Twist(linear=Vector3(0, 0, 0), angular=Vector3(0, 0, -0.05))
+                self.robot_movement_pub.publish(my_twist)
+                rospy.sleep(2)
+                print("ids is", ids)
+                #each time you see a tag, mark it as true in self.tags_bool and once we get number of tags - 1 Trues we can move into the next part
+            if (ids is not None) and (len(ids) == (self.number_of_tags - 1)):
+                print("entered the human action branch")
                 self.number_of_tags -= 1
                 for tag in self.tags:
                     if [tag] not in ids:
@@ -134,10 +148,10 @@ class ExecuteAction(object):
                         self.tags.remove(tag)
                         break
 
-            self.initialized = False
-            self.choose_next_action()
-            self.scanning = False
-            self.taking_to_tag = False
+                self.initialized = False
+                self.choose_next_action()
+                self.scanning = False
+                self.taking_to_tag = False
         elif (self.taking_to_tag): # When we have the dumbell and travelling to the tag
             # take the ROS message with the image and turn it into a format cv2 can use
             img = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
@@ -204,12 +218,14 @@ class ExecuteAction(object):
     def process_scan(self, data):
 
         if (not self.initialized):
+            print("Initializing...")
             return
         if (self.going_back):
             for i in range (5):
                 r = data.ranges[-i]
                 l = data.ranges[i]
-                if ((r <= 0.3 and r > 0.2) or (l <= 0.3 and l > 0.2)) and self.robotpos == 1: # If we are close enough to the AR tag
+                if ((r <= 0.5 and r > 0.4) or (l <= 0.5 and l > 0.4)) and self.robotpos == 1: # If we are close enough to the AR tag
+                    print("in the scan going back branch - close enough")
                     self.robotpos = 2
                     my_twist = Twist(linear=Vector3(0.0, 0, 0), angular=Vector3(0, 0, 0))
                     self.robot_movement_pub.publish(my_twist) # stop
@@ -218,7 +234,7 @@ class ExecuteAction(object):
                     my_twist = Twist(linear=Vector3(), angular=Vector3(0, 0, 0.7854)) 
                     self.robot_movement_pub.publish(my_twist)
                     # Turning time. Determined that 2.2 was better than 2 through trial and error
-                    rospy.sleep(2.2) 
+                    rospy.sleep(4) 
                     my_twist = Twist(linear=Vector3(), angular=Vector3())
                     self.robot_movement_pub.publish(my_twist)
 
@@ -234,20 +250,20 @@ class ExecuteAction(object):
                     self.robot_movement_pub.publish(my_twist) # stop
 
                     # Put the dumbell down
-                    arm_joint_goal = [0.0, 0.0, 0.0, 0.0]
-                    self.move_group_arm.go(arm_joint_goal)
-                    self.move_group_arm.stop()
-                    rospy.sleep(7)
+                    # arm_joint_goal = [0.0, 0.0, 0.0, 0.0]
+                    # self.move_group_arm.go(arm_joint_goal)
+                    # self.move_group_arm.stop()
+                    # rospy.sleep(7)
 
-                    gripper_joint_goal = [0.01, -0.01]
-                    self.move_group_gripper.go(gripper_joint_goal)
-                    self.move_group_gripper.stop()
-                    rospy.sleep(5)
+                    # gripper_joint_goal = [0.01, -0.01]
+                    # self.move_group_gripper.go(gripper_joint_goal)
+                    # self.move_group_gripper.stop()
+                    # rospy.sleep(5)
 
-                    arm_joint_goal = [0.0, math.radians(-20), 0.0, 0.0]
-                    self.move_group_arm.go(arm_joint_goal)
-                    self.move_group_arm.stop()
-                    rospy.sleep(10)
+                    # arm_joint_goal = [0.0, math.radians(-20), 0.0, 0.0]
+                    # self.move_group_arm.go(arm_joint_goal)
+                    # self.move_group_arm.stop()
+                    # rospy.sleep(10)
 
                     #drive back and start turning
                     my_twist = Twist(linear=Vector3(-0.2, 0, 0), angular=Vector3(0, 0, 0.6))
@@ -278,19 +294,19 @@ class ExecuteAction(object):
                     self.robot_movement_pub.publish(my_twist)
 
                     #picks up dumbell
-                    arm_joint_goal = [math.radians(min(r, l)), math.radians(20.0), 0.0, 0.0]
-                    self.move_group_arm.go(arm_joint_goal)
-                    self.move_group_arm.stop()
-                    rospy.sleep(5)
+                    # arm_joint_goal = [math.radians(min(r, l)), math.radians(20.0), 0.0, 0.0]
+                    # self.move_group_arm.go(arm_joint_goal)
+                    # self.move_group_arm.stop()
+                    # rospy.sleep(5)
 
-                    gripper_joint_goal = [-0.01, 0.01]
-                    self.move_group_gripper.go(gripper_joint_goal, wait=True)
-                    self.move_group_gripper.stop()
+                    # gripper_joint_goal = [-0.01, 0.01]
+                    # self.move_group_gripper.go(gripper_joint_goal, wait=True)
+                    # self.move_group_gripper.stop()
 
-                    arm_joint_goal = [0.0, math.radians(-75), 0.0, 0.0]
-                    self.move_group_arm.go(arm_joint_goal)
-                    self.move_group_arm.stop()
-                    rospy.sleep(10)
+                    # arm_joint_goal = [0.0, math.radians(-75), 0.0, 0.0]
+                    # self.move_group_arm.go(arm_joint_goal)
+                    # self.move_group_arm.stop()
+                    # rospy.sleep(10)
 
                     # Moves back and starts turning
                     my_twist = Twist(linear=Vector3(-0.2, 0, 0), angular=Vector3(0, 0, 0.5))
@@ -310,12 +326,12 @@ class ExecuteAction(object):
         # Give time for all publishers to initialize
         rospy.sleep(3)
         # Choose the first action
-        self.choose_next_action()
+        # self.choose_next_action()
         rospy.spin()
 
 
 if __name__ == "__main__":
-    node = QAction()
+    node = ExecuteAction()
     node.run()
 
 # Master Node
