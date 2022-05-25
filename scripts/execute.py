@@ -133,10 +133,11 @@ class ExecuteAction(object):
             # turn around to search for tags
             print("ids are", ids)
             tag_chosen = -1
-            for tag in self.tags:
-                if [tag] in ids:
-                    self.tag_shown = True
-                    tag_chosen = tag
+            if ids is not None:
+                for tag in self.tags:
+                    if [tag] in ids:
+                        self.tag_shown = True
+                        tag_chosen = tag
 
             if (ids is not None) and (self.tag_shown):
                 print("Entered the human action branch")
@@ -144,6 +145,10 @@ class ExecuteAction(object):
                 self.board_state[tag_chosen] = 2
                 self.tags.remove(tag_chosen)
 
+                arm_joint_goal = [0.0, 0.0, 0.0, 0.0]
+                self.move_group_arm.go(arm_joint_goal)
+                self.move_group_arm.stop()
+                rospy.sleep(5)
                 self.tag_shown = False
                 self.initialized = False
                 self.choose_next_action()
@@ -231,12 +236,16 @@ class ExecuteAction(object):
             return
         
         if (self.scanning):
-            if data.ranges[-10] == data.ranges[10]:
+            print("process scan scanning branch")
+            if data.ranges[-15] == data.ranges[15]:
+                print("now parallel")
                 self.parallel_to_wall = True
             if self.parallel_to_wall:
+                print("stop moving")
                 my_twist = Twist(linear=Vector3(0.0, 0, 0), angular=Vector3(0, 0, 0))
                 self.robot_movement_pub.publish(my_twist)
             else:
+                print(1)
                 my_twist = Twist(linear=Vector3(0.0, 0, 0), angular=Vector3(0, 0, 0.05))
                 self.robot_movement_pub.publish(my_twist)
         elif (self.going_back):
@@ -253,9 +262,10 @@ class ExecuteAction(object):
                     my_twist = Twist(linear=Vector3(), angular=Vector3(0, 0, 0.7854)) 
                     self.robot_movement_pub.publish(my_twist)
                     # Turning time. Determined that 2.2 was better than 2 through trial and error
-                    rospy.sleep(3) 
+                    rospy.sleep(4.2) 
                     my_twist = Twist(linear=Vector3(), angular=Vector3())
                     self.robot_movement_pub.publish(my_twist)
+                    rospy.sleep(3)
 
                     if (self.current_state == 0):
                         self.scanning = True
