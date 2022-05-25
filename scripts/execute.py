@@ -22,7 +22,7 @@ class ExecuteAction(object):
         # Initialize this node
         rospy.init_node("execute_action")
 
-        self.state = 0
+        self.current_state = 0 # 0 for scanning, 1 for going back with the dumbbell
 
         self.aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_50)
         self.taking_to_tag = False
@@ -32,8 +32,8 @@ class ExecuteAction(object):
         self.number_of_tags = 9
         self.tags = [0, 1, 2, 3, 4, 5, 6, 7, 8]
         self.next_tag = 0
-        self.tags_bool = [False for i in self.tags]
-        print("initializing")
+        self.bottom_tag = 0
+        self.tag_shown = False
 
         self.depth = 3 # depth for minimax search
 
@@ -124,34 +124,30 @@ class ExecuteAction(object):
                     self.robot_movement_pub.publish(my_twist)
         elif (self.scanning): # Only switch to self.scanning once we have reached the initial position
             img = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
-            print("in the scanning branch")
+            print("In the scanning branch")
             # turn the image into a grayscale
             grayscale_image = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             # search for tags from DICT_4X4_50 in a GRAYSCALE image
             corners, ids, rejected_points = cv2.aruco.detectMarkers(grayscale_image, self.aruco_dict)
             # turn around to search for tags
-            for i in range(10):
-                my_twist = Twist(linear=Vector3(0, 0, 0), angular=Vector3(0, 0, 0.05))
-                self.robot_movement_pub.publish(my_twist)
-                rospy.sleep(1)
-                my_twist = Twist(linear=Vector3(0, 0, 0), angular=Vector3(0, 0, -0.05))
-                self.robot_movement_pub.publish(my_twist)
-                rospy.sleep(2)
-                print("ids is", ids)
-                #each time you see a tag, mark it as true in self.tags_bool and once we get number of tags - 1 Trues we can move into the next part
-            if (ids is not None) and (len(ids) == (self.number_of_tags - 1)):
-                print("entered the human action branch")
-                self.number_of_tags -= 1
-                for tag in self.tags:
-                    if [tag] not in ids:
-                        self.board_state[tag] = 2
-                        self.tags.remove(tag)
-                        break
+            tag_chosen = -1
+            for tag in self.tags:
+                if [tag] in ids:
+                    self.tag_shown = True
+                    tag_chosen = tag
 
+            if (ids is not None) and (self.tag_shown):
+                print("Entered the human action branch")
+                self.number_of_tags -= 1
+                self.board_state[tag_chosen] = 2
+                self.tags.remove(tag_chosen)
+
+                self.tag_shown = False
                 self.initialized = False
                 self.choose_next_action()
                 self.scanning = False
                 self.taking_to_tag = False
+                self.robotpos = 0
         elif (self.taking_to_tag): # When we have the dumbell and travelling to the tag
             # take the ROS message with the image and turn it into a format cv2 can use
             img = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
@@ -162,12 +158,19 @@ class ExecuteAction(object):
             # search for tags from DICT_4X4_50 in a GRAYSCALE image
             corners, ids, rejected_points = cv2.aruco.detectMarkers(grayscale_image, self.aruco_dict)
 
+            if self.next_tag % 3 == 0:
+                self.bottom_tag = 10
+            elif self.next_tag % 3 == 1:
+                self.bottom_tag = 11
+            else:
+                self.board_tag = 12
+
             if self.robotpos == 1: # Keep rotating until we see the tag we want
                 my_twist = Twist(linear=Vector3(0, 0, 0), angular=Vector3(0, 0, 0.1))
                 self.robot_movement_pub.publish(my_twist)
 
-            if (ids is not None) and [self.tag] in ids: # Only start moving when we see the tag we want
-                index_of_id = ids.tolist().index([self.tag])
+            if (ids is not None) and [self.bottom_tag] in ids: # Only start moving when we see the tag we want
+                index_of_id = ids.tolist().index([self.bottom_tag])
                 sum_x = 0
                 sum_y = 0
                 for i in range(4):
@@ -220,6 +223,7 @@ class ExecuteAction(object):
         if (not self.initialized):
             print("Initializing...")
             return
+
         if (self.going_back):
             for i in range (5):
                 r = data.ranges[-i]
@@ -238,7 +242,11 @@ class ExecuteAction(object):
                     my_twist = Twist(linear=Vector3(), angular=Vector3())
                     self.robot_movement_pub.publish(my_twist)
 
-                    self.scanning = True
+                    if (self.current_state == 0):
+                        self.scanning = True
+                    else:
+                        self.taking_to_tag = True
+
                     self.going_back = False
         if (self.taking_to_tag): # Taking to tag case
             for i in range (5):
@@ -277,8 +285,8 @@ class ExecuteAction(object):
 
                     # Reset parameters and choose next action
                     self.robotpos = 0
-                    self.initialized = False
-                    self.choose_next_action()
+                    self.current_state = 0
+                    self.going_back = True
                     self.taking_to_tag = False
                     rospy.sleep(2)
         else: # When we're looking for dumbells
@@ -318,7 +326,9 @@ class ExecuteAction(object):
                     rospy.sleep(5)
 
                     #start looking for AR tag
-                    self.taking_to_tag = True
+                    self.going_back = True
+                    self.current_state = 1
+                    self.taking_to_tag = False
                     self.color = False
 
 
