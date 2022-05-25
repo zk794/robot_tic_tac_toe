@@ -12,7 +12,7 @@ from std_msgs.msg import Header
 from sensor_msgs.msg import Image
 from sensor_msgs.msg import LaserScan
 
-# import moveit_commander
+import moveit_commander
 import math
 
 from states_tree import StateTree, StateNode
@@ -31,8 +31,8 @@ class ExecuteAction(object):
         self.board_state = [0, 0, 0, 0, 0, 0, 0, 0, 0]
         self.number_of_tags = 9
         self.tags = [0, 1, 2, 3, 4, 5, 6, 7, 8]
-        self.next_tag = 0
-        self.bottom_tag = 0
+        self.next_tag = -1
+        self.bottom_tag = -1
         self.tag_shown = False
 
         self.depth = 3 # depth for minimax search
@@ -47,8 +47,8 @@ class ExecuteAction(object):
         self.robotpos = 1 # should be 0
 
         # set the robot arm and gripper to its default state
-        # self.move_group_arm = moveit_commander.MoveGroupCommander("arm")
-        # self.move_group_gripper = moveit_commander.MoveGroupCommander("gripper")
+        self.move_group_arm = moveit_commander.MoveGroupCommander("arm")
+        self.move_group_gripper = moveit_commander.MoveGroupCommander("gripper")
 
         # arm_joint_goal = [0.0, 0.0, 0.0, 0.0]
         # self.move_group_arm.go(arm_joint_goal)
@@ -130,6 +130,7 @@ class ExecuteAction(object):
             # search for tags from DICT_4X4_50 in a GRAYSCALE image
             corners, ids, rejected_points = cv2.aruco.detectMarkers(grayscale_image, self.aruco_dict)
             # turn around to search for tags
+            print("ids are", ids)
             tag_chosen = -1
             for tag in self.tags:
                 if [tag] in ids:
@@ -149,6 +150,7 @@ class ExecuteAction(object):
                 self.taking_to_tag = False
                 self.robotpos = 0
         elif (self.taking_to_tag): # When we have the dumbell and travelling to the tag
+            print("taking to tag")
             # take the ROS message with the image and turn it into a format cv2 can use
             img = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
 
@@ -157,19 +159,22 @@ class ExecuteAction(object):
 
             # search for tags from DICT_4X4_50 in a GRAYSCALE image
             corners, ids, rejected_points = cv2.aruco.detectMarkers(grayscale_image, self.aruco_dict)
-
+            print("ids are ", ids)
+            print("robotpos is", self.robotpos)
             if self.next_tag % 3 == 0:
                 self.bottom_tag = 10
             elif self.next_tag % 3 == 1:
                 self.bottom_tag = 11
             else:
-                self.board_tag = 12
+                self.bottom_tag = 12
 
             if self.robotpos == 1: # Keep rotating until we see the tag we want
-                my_twist = Twist(linear=Vector3(0, 0, 0), angular=Vector3(0, 0, 0.1))
+                my_twist = Twist(linear=Vector3(0, 0, 0), angular=Vector3(0, 0, 0.05))
                 self.robot_movement_pub.publish(my_twist)
 
             if (ids is not None) and [self.bottom_tag] in ids: # Only start moving when we see the tag we want
+                print("saw the right tag")
+                self.robotpos = 0
                 index_of_id = ids.tolist().index([self.bottom_tag])
                 sum_x = 0
                 sum_y = 0
@@ -179,7 +184,7 @@ class ExecuteAction(object):
                 cx = sum_x / 4 # Find the center of the tag
                 cy = sum_y / 4
 
-                if self.robotpos == 1: # Robot will move until it's close enough to the tag
+                if self.robotpos == 0: # Robot will move until it's close enough to the tag
                     my_twist = Twist(linear=Vector3(0.05, 0, 0), angular=Vector3(0, 0, 0.001*(-cx + 160)))
                     self.robot_movement_pub.publish(my_twist)
         else: # looking for object
@@ -246,9 +251,11 @@ class ExecuteAction(object):
                         self.scanning = True
                     else:
                         self.taking_to_tag = True
+                        self.robotpos = 1
 
                     self.going_back = False
         if (self.taking_to_tag): # Taking to tag case
+            print("taking to tag")
             for i in range (5):
                 r = data.ranges[-i]
                 l = data.ranges[i]
@@ -311,10 +318,28 @@ class ExecuteAction(object):
                     # self.move_group_gripper.go(gripper_joint_goal, wait=True)
                     # self.move_group_gripper.stop()
 
-                    # arm_joint_goal = [0.0, math.radians(-75), 0.0, 0.0]
-                    # self.move_group_arm.go(arm_joint_goal)
-                    # self.move_group_arm.stop()
-                    # rospy.sleep(10)
+                    
+                        
+
+                        
+
+                    if self.next_tag < 3:
+                        arm_joint_goal = [0.0, math.radians(-10), math.radians(-50), math.radians(-30)]
+                        self.move_group_arm.go(arm_joint_goal)
+                        self.move_group_arm.stop()
+                        rospy.sleep(5)
+                    if self.next_tag >= 3 and self.next_tag < 6:
+                        arm_joint_goal = [0.0, math.radians(30), math.radians(-50), math.radians(-70)]
+                        self.move_group_arm.go(arm_joint_goal)
+                        self.move_group_arm.stop()
+                        rospy.sleep(5)
+                    if self.next_tag >= 6 and self.next_tag < 9:
+                        arm_joint_goal = [0.0, math.radians(60), math.radians(-50), math.radians(-100)]
+                        self.move_group_arm.go(arm_joint_goal)
+                        self.move_group_arm.stop()
+                        rospy.sleep(5)
+
+           
 
                     # Moves back and starts turning
                     my_twist = Twist(linear=Vector3(-0.2, 0, 0), angular=Vector3(0, 0, 0.5))
@@ -329,7 +354,7 @@ class ExecuteAction(object):
                     self.going_back = True
                     self.current_state = 1
                     self.taking_to_tag = False
-                    self.color = False
+                    # self.color = False
 
 
     def run(self):
