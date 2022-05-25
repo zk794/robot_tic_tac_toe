@@ -34,6 +34,7 @@ class ExecuteAction(object):
         self.next_tag = -1
         self.bottom_tag = -1
         self.tag_shown = False
+        self.parallel_to_wall = False
 
         self.depth = 3 # depth for minimax search
 
@@ -228,8 +229,17 @@ class ExecuteAction(object):
         if (not self.initialized):
             print("Initializing...")
             return
-
-        if (self.going_back):
+        
+        if (self.scanning):
+            if data.ranges[-10] == data.ranges[10]:
+                self.parallel_to_wall = True
+            if self.parallel_to_wall:
+                my_twist = Twist(linear=Vector3(0.0, 0, 0), angular=Vector3(0, 0, 0))
+                self.robot_movement_pub.publish(my_twist)
+            else:
+                my_twist = Twist(linear=Vector3(0.0, 0, 0), angular=Vector3(0, 0, 0.05))
+                self.robot_movement_pub.publish(my_twist)
+        elif (self.going_back):
             for i in range (5):
                 r = data.ranges[-i]
                 l = data.ranges[i]
@@ -243,7 +253,7 @@ class ExecuteAction(object):
                     my_twist = Twist(linear=Vector3(), angular=Vector3(0, 0, 0.7854)) 
                     self.robot_movement_pub.publish(my_twist)
                     # Turning time. Determined that 2.2 was better than 2 through trial and error
-                    rospy.sleep(4) 
+                    rospy.sleep(3) 
                     my_twist = Twist(linear=Vector3(), angular=Vector3())
                     self.robot_movement_pub.publish(my_twist)
 
