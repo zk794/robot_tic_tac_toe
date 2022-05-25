@@ -78,8 +78,8 @@ class place_object(object):
         # Setup publishers and subscribers
  
         # subscribe to the robot's RGB camera data stream
-        self.image_sub = rospy.Subscriber('camera/rgb/image_raw',
-                Image, self.image_callback)
+        # self.image_sub = rospy.Subscriber('camera/rgb/image_raw',
+        #         Image, self.image_callback)
 
         # Declare our node as a subscriber to the scan topic and
         #   set self.process_scan as the function to be used for callback.
@@ -95,17 +95,51 @@ class place_object(object):
         
         return 
     
-    def image_callback(self, msg):
+    # def image_callback(self, msg):
 
         
-        # take the ROS message with the image and turn it into a format cv2 can use
-        img = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+    #     # take the ROS message with the image and turn it into a format cv2 can use
+    #     img = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
         
 
-        # turn the image into a grayscale
-        grayscale_image = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    #     # turn the image into a grayscale
+    #     grayscale_image = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
         
+    #     self.idpicker = 1
+    #     if self.taking_to_tag == True and self.move_arm == True:
+    #         print(2)
+
+            
+
+    #         if self.idpicker == 0:
+    #             arm_joint_goal = [0.0, math.radians(-10), math.radians(-50), math.radians(-30)]
+    #             self.move_group_arm.go(arm_joint_goal)
+    #             self.move_group_arm.stop()
+    #             rospy.sleep(5)
+    #         if self.idpicker == 1:
+    #             arm_joint_goal = [0.0, math.radians(30), math.radians(-50), math.radians(-70)]
+    #             self.move_group_arm.go(arm_joint_goal)
+    #             self.move_group_arm.stop()
+    #             rospy.sleep(5)
+    #         if self.idpicker == 2:
+    #             arm_joint_goal = [0.0, math.radians(60), math.radians(-50), math.radians(-100)]
+    #             self.move_group_arm.go(arm_joint_goal)
+    #             self.move_group_arm.stop()
+    #             rospy.sleep(5)
+
+
+
+    #         self.move_arm = False
+
+    #     cv2.imshow("window", img) 
+    #     cv2.waitKey(3)
+
+        return
+        
+
+
+    def process_scan(self, data):
         self.idpicker = 1
         if self.taking_to_tag == True and self.move_arm == True:
             print(2)
@@ -128,18 +162,10 @@ class place_object(object):
                 self.move_group_arm.stop()
                 rospy.sleep(5)
 
-
-
             self.move_arm = False
 
-        cv2.imshow("window", img) 
-        cv2.waitKey(3)
-        
-
-
-    def process_scan(self, data):
         if self.taking_to_tag == False and self.move_arm == True:
-            #print(1)
+            
             for i in range (5):
                 r = data.ranges[-i]
                 l = data.ranges[i]          
