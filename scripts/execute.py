@@ -279,7 +279,7 @@ class ExecuteAction(object):
             for i in range (5):
                 r = data.ranges[-i]
                 l = data.ranges[i]
-                if ((r <= 0.4 and r > 0.35) or (l <= 0.4 and l > 0.35)) and self.robotpos == 1: # If we are close enough to the AR tag
+                if ((r <= 0.2 and r > 0.0) or (l <= 0.2 and l > 0.0)) and self.robotpos == 1: # If we are close enough to the AR tag
                     self.robotpos = 2
                     my_twist = Twist(linear=Vector3(0.0, 0, 0), angular=Vector3(0, 0, 0))
                     self.robot_movement_pub.publish(my_twist) # stop
@@ -290,10 +290,10 @@ class ExecuteAction(object):
                     # self.move_group_arm.stop()
                     # rospy.sleep(7)
 
-                    # gripper_joint_goal = [0.01, -0.01]
-                    # self.move_group_gripper.go(gripper_joint_goal)
-                    # self.move_group_gripper.stop()
-                    # rospy.sleep(5)
+                    gripper_joint_goal = [0.01, -0.01]
+                    self.move_group_gripper.go(gripper_joint_goal)
+                    self.move_group_gripper.stop()
+                    rospy.sleep(5)
 
                     # arm_joint_goal = [0.0, math.radians(-20), 0.0, 0.0]
                     # self.move_group_arm.go(arm_joint_goal)
@@ -301,7 +301,7 @@ class ExecuteAction(object):
                     # rospy.sleep(10)
 
                     #drive back and start turning
-                    my_twist = Twist(linear=Vector3(-0.2, 0, 0), angular=Vector3(0, 0, 0.6))
+                    my_twist = Twist(linear=Vector3(-2, 0, 0), angular=Vector3(0, 0, 0))
                     self.robot_movement_pub.publish(my_twist)
 
                     rospy.sleep(2)
@@ -322,7 +322,7 @@ class ExecuteAction(object):
             for i in range (10):
                 r = data.ranges[-i]
                 l = data.ranges[i]
-                if ((r <= 0.22 and r > 0.2) or (l <= 0.22 and l >0.2)) and self.robotpos == 0 and self.taking_to_tag == False and self.color == True:
+                if ((r <= 0.24 and r > 0.2) or (l <= 0.24 and l >0.2)) and self.robotpos == 0 and self.taking_to_tag == False and self.color == True:
                     #stops
                     self.robotpos = 1
                     my_twist = Twist(linear=Vector3(0.0, 0, 0), angular=Vector3(0, 0, 0))
@@ -344,20 +344,59 @@ class ExecuteAction(object):
                         
 
                     if self.next_tag < 3:
+                        #picks up dumbell
+                        arm_joint_goal = [0, math.radians(20.0), 0.0, 0.0]
+                        self.move_group_arm.go(arm_joint_goal)
+                        self.move_group_arm.stop()
+                        rospy.sleep(7)
+
+                        gripper_joint_goal = [-0.01, 0.01]
+                        self.move_group_gripper.go(gripper_joint_goal, wait=True)
+                        self.move_group_gripper.stop()
+                        rospy.sleep(3)
+
                         arm_joint_goal = [0.0, math.radians(-10), math.radians(-50), math.radians(-30)]
                         self.move_group_arm.go(arm_joint_goal)
                         self.move_group_arm.stop()
                         rospy.sleep(5)
+                        
                     if self.next_tag >= 3 and self.next_tag < 6:
+                        #picks up dumbell
+                        print(0)
+                        arm_joint_goal = [0, math.radians(40.0), 0.0, math.radians(-40)]
+                        self.move_group_arm.go(arm_joint_goal)
+                        self.move_group_arm.stop()
+                        rospy.sleep(7)
+                        print(1)
+
+                        gripper_joint_goal = [-0.01, 0.01]
+                        self.move_group_gripper.go(gripper_joint_goal, wait=True)
+                        self.move_group_gripper.stop()
+                        rospy.sleep(3)
+                        print(2)
+
                         arm_joint_goal = [0.0, math.radians(30), math.radians(-50), math.radians(-70)]
                         self.move_group_arm.go(arm_joint_goal)
                         self.move_group_arm.stop()
                         rospy.sleep(5)
+                        
                     if self.next_tag >= 6 and self.next_tag < 9:
+                        #picks up dumbell
+                        arm_joint_goal = [0, math.radians(50.0), 0.0, math.radians(-50)]
+                        self.move_group_arm.go(arm_joint_goal)
+                        self.move_group_arm.stop()
+                        rospy.sleep(7)
+
+                        gripper_joint_goal = [-0.01, 0.01]
+                        self.move_group_gripper.go(gripper_joint_goal, wait=True)
+                        self.move_group_gripper.stop()
+                        rospy.sleep(3)
+
                         arm_joint_goal = [0.0, math.radians(60), math.radians(-50), math.radians(-100)]
                         self.move_group_arm.go(arm_joint_goal)
                         self.move_group_arm.stop()
                         rospy.sleep(5)
+                        
 
            
 
