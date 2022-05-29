@@ -408,7 +408,7 @@ class ExecuteAction(object):
 
                     if self.next_tag < 3:
                         #picks up dumbell
-                        arm_joint_goal = [0, math.radians(10.0), 0.0, math.radians(-10)]
+                        arm_joint_goal = [0, math.radians(0.0), 0.0, math.radians(0)]
                         self.move_group_arm.go(arm_joint_goal)
                         self.move_group_arm.stop()
                         rospy.sleep(7)
