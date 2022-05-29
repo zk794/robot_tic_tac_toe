@@ -35,6 +35,8 @@ class ExecuteAction(object):
         self.bottom_tag = -1
         self.tag_shown = False
         self.parallel_to_wall = False
+        self.negative = 1
+        self.base_tag = False
 
         self.depth = 3 # depth for minimax search
 
@@ -51,15 +53,15 @@ class ExecuteAction(object):
         self.move_group_arm = moveit_commander.MoveGroupCommander("arm")
         self.move_group_gripper = moveit_commander.MoveGroupCommander("gripper")
 
-        # arm_joint_goal = [0.0, 0.0, 0.0, 0.0]
-        # self.move_group_arm.go(arm_joint_goal)
-        # self.move_group_arm.stop()
-        # rospy.sleep(5)
+        arm_joint_goal = [0.0, 0.0, 0.0, 0.0]
+        self.move_group_arm.go(arm_joint_goal)
+        self.move_group_arm.stop()
+        rospy.sleep(5)
 
-        # gripper_joint_goal = [0.01, -0.01]
-        # self.move_group_gripper.go(gripper_joint_goal)
-        # self.move_group_gripper.stop()
-        # rospy.sleep(2)
+        gripper_joint_goal = [0.01, -0.01]
+        self.move_group_gripper.go(gripper_joint_goal)
+        self.move_group_gripper.stop()
+        rospy.sleep(2)
 
         # Setup publishers and subscribers
 
@@ -107,11 +109,12 @@ class ExecuteAction(object):
             corners, ids, rejected_points = cv2.aruco.detectMarkers(grayscale_image, self.aruco_dict)
 
             if self.robotpos == 1: # Keep rotating until we see the tag we want
-                my_twist = Twist(linear=Vector3(0, 0, 0), angular=Vector3(0, 0, 0.05))
+                my_twist = Twist(linear=Vector3(0, 0, 0), angular=Vector3(0, 0, 0.15))
                 self.robot_movement_pub.publish(my_twist)
 
             if (ids is not None) and [9] in ids: # Only start moving when we see the tag we want
                 # index_of_id = ids.tolist().index([self.tag])
+                self.base_tag = True
                 sum_x = 0
                 sum_y = 0
                 for i in range(4):
@@ -125,36 +128,74 @@ class ExecuteAction(object):
                     self.robot_movement_pub.publish(my_twist)
         elif (self.scanning): # Only switch to self.scanning once we have reached the initial position
             img = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
-            print("In the scanning branch")
+            # print("In the scanning branch")
             # turn the image into a grayscale
             grayscale_image = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             # search for tags from DICT_4X4_50 in a GRAYSCALE image
             corners, ids, rejected_points = cv2.aruco.detectMarkers(grayscale_image, self.aruco_dict)
             # turn around to search for tags
             print("ids are", ids)
-            tag_chosen = -1
-            if ids is not None:
-                for tag in self.tags:
-                    if [tag] in ids:
-                        self.tag_shown = True
-                        tag_chosen = tag
-
-            if (ids is not None) and (self.tag_shown):
-                print("Entered the human action branch")
-                self.number_of_tags -= 1
-                self.board_state[tag_chosen] = 2
-                self.tags.remove(tag_chosen)
-
-                arm_joint_goal = [0.0, 0.0, 0.0, 0.0]
-                self.move_group_arm.go(arm_joint_goal)
-                self.move_group_arm.stop()
-                rospy.sleep(5)
-                self.tag_shown = False
-                self.initialized = False
-                self.choose_next_action()
-                self.scanning = False
-                self.taking_to_tag = False
+            if (ids is not None) and [11] in ids and not self.parallel_to_wall: # Only start moving when we see the tag we want
+                print("centering on 11")
                 self.robotpos = 0
+                index_of_id = ids.tolist().index([11])
+                sum_x = 0
+                sum_y = 0
+                for i in range(4):
+                    sum_x += corners[index_of_id][0][i][0]
+                    sum_y += corners[index_of_id][0][i][1]
+                cx = sum_x / 4 # Find the center of the tag
+                cy = sum_y / 4
+                print("cx is", cx)
+
+                if self.robotpos == 0: # Robot will move until it's close enough to the tag
+                    my_twist = Twist(linear=Vector3(0, 0, 0), angular=Vector3(0, 0, 0.001*(-cx + 160)))
+                    self.robot_movement_pub.publish(my_twist)
+                    if (cx > 140) and (cx < 165):
+                        self.parallel_to_wall = True
+            elif (not self.parallel_to_wall):
+                my_twist = Twist(linear=Vector3(0, 0, 0), angular=Vector3(0, 0, 0.05))
+                self.robot_movement_pub.publish(my_twist)
+            if self.parallel_to_wall:
+                print("Parallel to wall, waiting for tag")
+                tag_chosen = -1
+                if ids is not None:
+                    for tag in self.tags:
+                        if [tag] in ids:
+                            self.tag_shown = True
+                            tag_chosen = tag
+
+                if (ids is not None) and (self.tag_shown):
+                    print("Entered the human action branch")
+                    my_twist = Twist(linear=Vector3(0, 0, 0), angular=Vector3(0, 0, 0.05))
+                    self.robot_movement_pub.publish(my_twist)
+                    self.number_of_tags -= 1
+                    self.board_state[tag_chosen] = 2
+                    self.tags.remove(tag_chosen)
+
+                    arm_joint_goal = [0.0, 0.0, 0.0, 0.0]
+                    self.move_group_arm.go(arm_joint_goal)
+                    self.move_group_arm.stop()
+                    rospy.sleep(5)
+
+                    gripper_joint_goal = [0.01, -0.01]
+                    self.move_group_gripper.go(gripper_joint_goal, wait=True)
+                    self.move_group_gripper.stop()
+                    rospy.sleep(3)
+
+                    self.tag_shown = False
+                    self.initialized = False
+                    self.choose_next_action()
+                    self.scanning = False
+                    self.taking_to_tag = False
+                    self.parallel_to_wall = False
+                    self.robotpos = 0
+                else:
+                    if self.parallel_to_wall:
+                        my_twist = Twist(linear=Vector3(0, 0, 0), angular=Vector3(0, 0, 0.1 * self.negative))
+                        self.robot_movement_pub.publish(my_twist)
+                        rospy.sleep(1)
+                        self.negative *= -1
         elif (self.taking_to_tag): # When we have the dumbell and travelling to the tag
             print("taking to tag")
             # take the ROS message with the image and turn it into a format cv2 can use
@@ -198,17 +239,28 @@ class ExecuteAction(object):
             hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
             # Color ranges for the 3 dumbells
-            # lower_blue = np.array([90, 60, 60])
-            # upper_blue = np.array([90, 255, 255])
+            lower_blue = np.array([80, 60, 60])
+            upper_blue = np.array([110, 255, 255])
 
             lower_green = np.array([30, 60, 60])
-            upper_green = np.array([45, 255, 255])
+            upper_green = np.array([70, 255, 255])
 
-            # lower_pink = np.array([120, 60, 60])
-            # upper_pink = np.array([170, 255, 255])
+            lower_pink = np.array([120, 60, 60])
+            upper_pink = np.array([170, 255, 255])
 
             # this erases all pixels that aren't the right color
-            mask = cv2.inRange(hsv, lower_green, upper_green)
+
+            if self.next_tag < 3:
+
+                mask = cv2.inRange(hsv, lower_blue, upper_blue)
+
+            if self.next_tag >= 3 and self.next_tag < 6:
+
+                mask = cv2.inRange(hsv, lower_green, upper_green)
+            
+            if self.next_tag >=6 and self.next_tag < 9: 
+
+                mask = cv2.inRange(hsv, lower_pink, upper_pink)
 
             # using moments() function, the center of the pixels is determined
             M = cv2.moments(mask)
@@ -221,7 +273,7 @@ class ExecuteAction(object):
 
                 #turns and moves towards the center of the pixels
                 cv2.circle(image, (cx, cy), 20, (0,0,255), -1)
-                my_twist = Twist(linear=Vector3(0.1, 0, 0), angular=Vector3(0, 0, 0.002*(-cx + 160)))
+                my_twist = Twist(linear=Vector3(0.05, 0, 0), angular=Vector3(0, 0, 0.002*(-cx + 160)))
                 self.robot_movement_pub.publish(my_twist)
             #turns until it finds the pixels of the right color
             elif self.robotpos == 0:
@@ -236,23 +288,24 @@ class ExecuteAction(object):
             return
         
         if (self.scanning):
-            print("process scan scanning branch")
-            if data.ranges[-15] == data.ranges[15]:
-                print("now parallel")
-                self.parallel_to_wall = True
-            if self.parallel_to_wall:
-                print("stop moving")
-                my_twist = Twist(linear=Vector3(0.0, 0, 0), angular=Vector3(0, 0, 0))
-                self.robot_movement_pub.publish(my_twist)
-            else:
-                print(1)
-                my_twist = Twist(linear=Vector3(0.0, 0, 0), angular=Vector3(0, 0, 0.05))
-                self.robot_movement_pub.publish(my_twist)
+            return
+            # print("process scan scanning branch")
+            # if min(data.ranges) == data.ranges[0] and data.ranges[0] != 0: #(data.ranges[-15] == data.ranges[15]) and (min(data.ranges) == data.ranges[0]):
+            #     print("now parallel")
+            #     self.parallel_to_wall = True
+            # if self.parallel_to_wall:
+            #     print("stop moving")
+            #     my_twist = Twist(linear=Vector3(0.0, 0, 0), angular=Vector3(0, 0, 0))
+            #     self.robot_movement_pub.publish(my_twist)
+            # else:
+            #     print(1)
+            #     my_twist = Twist(linear=Vector3(0.0, 0, 0), angular=Vector3(0, 0, 0.05))
+            #     self.robot_movement_pub.publish(my_twist)
         elif (self.going_back):
             for i in range (5):
-                r = data.ranges[-i]
-                l = data.ranges[i]
-                if ((r <= 0.5 and r > 0.4) or (l <= 0.5 and l > 0.4)) and self.robotpos == 1: # If we are close enough to the AR tag
+                right = data.ranges[-i]
+                left = data.ranges[i]
+                if (((right <= 0.5 and right > 0.4) or (left <= 0.5 and left > 0.4)) and (self.robotpos == 1 and self.base_tag == True)): # If we are close enough to the AR tag
                     print("in the scan going back branch - close enough")
                     self.robotpos = 2
                     my_twist = Twist(linear=Vector3(0.0, 0, 0), angular=Vector3(0, 0, 0))
@@ -262,7 +315,7 @@ class ExecuteAction(object):
                     my_twist = Twist(linear=Vector3(), angular=Vector3(0, 0, 0.7854)) 
                     self.robot_movement_pub.publish(my_twist)
                     # Turning time. Determined that 2.2 was better than 2 through trial and error
-                    rospy.sleep(4.2) 
+                    rospy.sleep(3.5) 
                     my_twist = Twist(linear=Vector3(), angular=Vector3())
                     self.robot_movement_pub.publish(my_twist)
                     rospy.sleep(3)
@@ -279,8 +332,10 @@ class ExecuteAction(object):
             for i in range (5):
                 r = data.ranges[-i]
                 l = data.ranges[i]
-                if ((r <= 0.2 and r > 0.0) or (l <= 0.2 and l > 0.0)) and self.robotpos == 1: # If we are close enough to the AR tag
+                print("r and l", r,l)
+                if ((r <= 0.29 and r > 0.0) or (l <= 0.29 and l > 0.0)) and self.robotpos == 0: # If we are close enough to the AR tag
                     self.robotpos = 2
+                    
                     my_twist = Twist(linear=Vector3(0.0, 0, 0), angular=Vector3(0, 0, 0))
                     self.robot_movement_pub.publish(my_twist) # stop
 
@@ -301,21 +356,29 @@ class ExecuteAction(object):
                     # rospy.sleep(10)
 
                     #drive back and start turning
-                    my_twist = Twist(linear=Vector3(-2, 0, 0), angular=Vector3(0, 0, 0))
+                    my_twist = Twist(linear=Vector3(-2, 0, 0), angular=Vector3(0, 0, 0.8))
                     self.robot_movement_pub.publish(my_twist)
 
-                    rospy.sleep(2)
+                    rospy.sleep(6)
 
                     my_twist = Twist(linear=Vector3(0, 0, 0), angular=Vector3(0, 0, 0))
                     self.robot_movement_pub.publish(my_twist)
-                    rospy.sleep(10)
+                    rospy.sleep(2)
 
                     # Reset parameters and choose next action
-                    self.robotpos = 0
-                    self.current_state = 0
                     self.going_back = True
+                    self.current_state = 0
                     self.taking_to_tag = False
+                    self.scanning = False
+                    self.tag_shown = False
+                    self.parallel_to_wall = False
+                    self.negative = 1
+                    self.base_tag = False
+                    self.robotpos = 1
+                    
                     rospy.sleep(2)
+
+                    # self.robotpos = 1
         else: # When we're looking for dumbells
             r = 0
             l = 0
@@ -345,7 +408,7 @@ class ExecuteAction(object):
 
                     if self.next_tag < 3:
                         #picks up dumbell
-                        arm_joint_goal = [0, math.radians(20.0), 0.0, 0.0]
+                        arm_joint_goal = [0, math.radians(10.0), 0.0, math.radians(-10)]
                         self.move_group_arm.go(arm_joint_goal)
                         self.move_group_arm.stop()
                         rospy.sleep(7)
@@ -404,7 +467,7 @@ class ExecuteAction(object):
                     my_twist = Twist(linear=Vector3(-0.2, 0, 0), angular=Vector3(0, 0, 0.5))
                     self.robot_movement_pub.publish(my_twist)
 
-                    rospy.sleep(1)
+                    rospy.sleep(3)
                     my_twist = Twist(linear=Vector3(0, 0, 0), angular=Vector3(0, 0, 0))
                     self.robot_movement_pub.publish(my_twist)
                     rospy.sleep(5)
@@ -413,6 +476,8 @@ class ExecuteAction(object):
                     self.going_back = True
                     self.current_state = 1
                     self.taking_to_tag = False
+                    self.scanning = False
+                    self.base_tag = False
                     # self.color = False
 
 
@@ -444,3 +509,4 @@ if __name__ == "__main__":
 # - Pick up the right dumbbell
 # - Move correctly to the AR tag and stick it
 # - Go back to the initial position and start scanning - use a flag to indicate the change of the state
+
