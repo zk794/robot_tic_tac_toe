@@ -37,6 +37,7 @@ class ExecuteAction(object):
         self.parallel_to_wall = False
         self.negative = 1
         self.base_tag = False
+        self.game_ended = False
 
         self.depth = 3 # depth for minimax search
 
@@ -113,6 +114,8 @@ class ExecuteAction(object):
         if (not self.initialized):
             print("Initializing...")
             return
+        if (self.game_ended):
+            return
 
         if (self.going_back):
             print("Going back branch")
@@ -166,9 +169,9 @@ class ExecuteAction(object):
                 print("cx is", cx)
 
                 if self.robotpos == 0: # Robot will move until it's close enough to the tag
-                    my_twist = Twist(linear=Vector3(0, 0, 0), angular=Vector3(0, 0, 0.001*(-cx + 160)))
+                    my_twist = Twist(linear=Vector3(0, 0, 0), angular=Vector3(0, 0, 0.01*(-cx + 160)))
                     self.robot_movement_pub.publish(my_twist)
-                    if (cx > 140) and (cx < 165):
+                    if (cx > 140) and (cx < 175):
                         self.parallel_to_wall = True
             elif (not self.parallel_to_wall):
                 my_twist = Twist(linear=Vector3(0, 0, 0), angular=Vector3(0, 0, 0.05))
@@ -202,6 +205,11 @@ class ExecuteAction(object):
 
                     self.tag_shown = False
                     self.initialized = False
+                    if self.check_game_done() == 2 or self.check_game_done == 3:
+                        my_twist = Twist(linear=Vector3(0, 0, 0), angular=Vector3(0, 0, 0.05))
+                        self.robot_movement_pub.publish(my_twist)
+                        self.game_ended = True
+                        return
                     self.choose_next_action()
                     self.scanning = False
                     self.taking_to_tag = False
@@ -304,6 +312,9 @@ class ExecuteAction(object):
             print("Initializing...")
             return
 
+        if self.game_ended:
+            return
+
         if (self.scanning):
             return
             # print("process scan scanning branch")
@@ -376,11 +387,18 @@ class ExecuteAction(object):
                     my_twist = Twist(linear=Vector3(-2, 0, 0), angular=Vector3(0, 0, 0.8))
                     self.robot_movement_pub.publish(my_twist)
 
-                    rospy.sleep(6)
+                    rospy.sleep(3)
 
                     my_twist = Twist(linear=Vector3(0, 0, 0), angular=Vector3(0, 0, 0))
                     self.robot_movement_pub.publish(my_twist)
                     rospy.sleep(2)
+
+                    if self.check_game_done() == 1 or self.check_game_done() == 3:
+                        my_twist = Twist(linear=Vector3(0, 0, 0), angular=Vector3(0, 0, 1))
+                        self.robot_movement_pub.publish(my_twist)
+                        self.game_ended = True
+                        rospy.sleep(2)
+                        return
 
                     # Reset parameters and choose next action
                     self.going_back = True
@@ -425,7 +443,7 @@ class ExecuteAction(object):
 
                     if self.next_tag < 3:
                         #picks up dumbell
-                        arm_joint_goal = [0, math.radians(0.0), 0.0, math.radians(0)]
+                        arm_joint_goal = [0, math.radians(-5.0), 0.0, math.radians(5)]
                         self.move_group_arm.go(arm_joint_goal)
                         self.move_group_arm.stop()
                         rospy.sleep(7)
