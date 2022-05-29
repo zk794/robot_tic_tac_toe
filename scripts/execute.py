@@ -80,6 +80,23 @@ class ExecuteAction(object):
         self.initialized = True
         self.color = False
 
+    # return 0 if game not finished, 1 if robot won, 2 if human won, 3 if draw
+    def check_game_done(self):
+        lines = [[0,1,2], [3,4,5], [6,7,8], [0,3,6], [1,4,7], [2,5,8], [0,4,8], [2,4,6]]
+        for l in lines:
+            row = [self.board_state[l[0]], self.board_state[l[1]], self.board_state[l[2]]]
+            count0 = row.count(0)
+            count1 = row.count(1)
+            count2 = row.count(2)
+            if count1 == 3:
+                return 1
+            if count2 == 3:
+                return 2
+
+        for e in self.board_state:
+            if e == 0: # empty spot so game not over
+                return 0
+        return 3 # draw
 
     def choose_next_action(self):
         # Choose the next action using the minimax algorithm and assign to self.next_tag
@@ -257,8 +274,8 @@ class ExecuteAction(object):
             if self.next_tag >= 3 and self.next_tag < 6:
 
                 mask = cv2.inRange(hsv, lower_green, upper_green)
-            
-            if self.next_tag >=6 and self.next_tag < 9: 
+
+            if self.next_tag >=6 and self.next_tag < 9:
 
                 mask = cv2.inRange(hsv, lower_pink, upper_pink)
 
@@ -286,7 +303,7 @@ class ExecuteAction(object):
         if (not self.initialized):
             print("Initializing...")
             return
-        
+
         if (self.scanning):
             return
             # print("process scan scanning branch")
@@ -312,10 +329,10 @@ class ExecuteAction(object):
                     self.robot_movement_pub.publish(my_twist) # stop
 
                     # Turn 180 degrees
-                    my_twist = Twist(linear=Vector3(), angular=Vector3(0, 0, 0.7854)) 
+                    my_twist = Twist(linear=Vector3(), angular=Vector3(0, 0, 0.7854))
                     self.robot_movement_pub.publish(my_twist)
                     # Turning time. Determined that 2.2 was better than 2 through trial and error
-                    rospy.sleep(3.5) 
+                    rospy.sleep(3.5)
                     my_twist = Twist(linear=Vector3(), angular=Vector3())
                     self.robot_movement_pub.publish(my_twist)
                     rospy.sleep(3)
@@ -335,7 +352,7 @@ class ExecuteAction(object):
                 print("r and l", r,l)
                 if ((r <= 0.29 and r > 0.0) or (l <= 0.29 and l > 0.0)) and self.robotpos == 0: # If we are close enough to the AR tag
                     self.robotpos = 2
-                    
+
                     my_twist = Twist(linear=Vector3(0.0, 0, 0), angular=Vector3(0, 0, 0))
                     self.robot_movement_pub.publish(my_twist) # stop
 
@@ -375,7 +392,7 @@ class ExecuteAction(object):
                     self.negative = 1
                     self.base_tag = False
                     self.robotpos = 1
-                    
+
                     rospy.sleep(2)
 
                     # self.robotpos = 1
@@ -401,10 +418,10 @@ class ExecuteAction(object):
                     # self.move_group_gripper.go(gripper_joint_goal, wait=True)
                     # self.move_group_gripper.stop()
 
-                    
-                        
 
-                        
+
+
+
 
                     if self.next_tag < 3:
                         #picks up dumbell
@@ -422,7 +439,7 @@ class ExecuteAction(object):
                         self.move_group_arm.go(arm_joint_goal)
                         self.move_group_arm.stop()
                         rospy.sleep(5)
-                        
+
                     if self.next_tag >= 3 and self.next_tag < 6:
                         #picks up dumbell
                         print(0)
@@ -442,7 +459,7 @@ class ExecuteAction(object):
                         self.move_group_arm.go(arm_joint_goal)
                         self.move_group_arm.stop()
                         rospy.sleep(5)
-                        
+
                     if self.next_tag >= 6 and self.next_tag < 9:
                         #picks up dumbell
                         arm_joint_goal = [0, math.radians(50.0), 0.0, math.radians(-50)]
@@ -459,9 +476,9 @@ class ExecuteAction(object):
                         self.move_group_arm.go(arm_joint_goal)
                         self.move_group_arm.stop()
                         rospy.sleep(5)
-                        
 
-           
+
+
 
                     # Moves back and starts turning
                     my_twist = Twist(linear=Vector3(-0.2, 0, 0), angular=Vector3(0, 0, 0.5))
@@ -509,4 +526,3 @@ if __name__ == "__main__":
 # - Pick up the right dumbbell
 # - Move correctly to the AR tag and stick it
 # - Go back to the initial position and start scanning - use a flag to indicate the change of the state
-
