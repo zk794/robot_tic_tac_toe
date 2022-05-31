@@ -298,7 +298,7 @@ class ExecuteAction(object):
 
                 #turns and moves towards the center of the pixels
                 cv2.circle(image, (cx, cy), 20, (0,0,255), -1)
-                my_twist = Twist(linear=Vector3(0.05, 0, 0), angular=Vector3(0, 0, 0.002*(-cx + 160)))
+                my_twist = Twist(linear=Vector3(0.05, 0, 0), angular=Vector3(0, 0, 0.0015*(-cx + 160)))
                 self.robot_movement_pub.publish(my_twist)
             #turns until it finds the pixels of the right color
             elif self.robotpos == 0:
@@ -357,31 +357,28 @@ class ExecuteAction(object):
                     self.going_back = False
         if (self.taking_to_tag): # Taking to tag case
             print("taking to tag")
-            for i in range (5):
+            for i in range (3):
                 r = data.ranges[-i]
                 l = data.ranges[i]
                 print("r and l", r,l)
                 if ((r <= 0.29 and r > 0.0) or (l <= 0.29 and l > 0.0)) and self.robotpos == 0: # If we are close enough to the AR tag
                     self.robotpos = 2
 
+                    if self.next_tag < 3:
+                        rospy.sleep(0.2)
+
                     my_twist = Twist(linear=Vector3(0.0, 0, 0), angular=Vector3(0, 0, 0))
                     self.robot_movement_pub.publish(my_twist) # stop
 
-                    # Put the dumbell down
-                    # arm_joint_goal = [0.0, 0.0, 0.0, 0.0]
-                    # self.move_group_arm.go(arm_joint_goal)
-                    # self.move_group_arm.stop()
-                    # rospy.sleep(7)
+                    
+
 
                     gripper_joint_goal = [0.01, -0.01]
                     self.move_group_gripper.go(gripper_joint_goal)
                     self.move_group_gripper.stop()
                     rospy.sleep(5)
 
-                    # arm_joint_goal = [0.0, math.radians(-20), 0.0, 0.0]
-                    # self.move_group_arm.go(arm_joint_goal)
-                    # self.move_group_arm.stop()
-                    # rospy.sleep(10)
+                    
 
                     #drive back and start turning
                     my_twist = Twist(linear=Vector3(-2, 0, 0), angular=Vector3(0, 0, 0.8))
@@ -417,24 +414,22 @@ class ExecuteAction(object):
         else: # When we're looking for dumbells
             r = 0
             l = 0
-            for i in range (10):
+            for i in range (7):
                 r = data.ranges[-i]
                 l = data.ranges[i]
-                if ((r <= 0.24 and r > 0.2) or (l <= 0.24 and l >0.2)) and self.robotpos == 0 and self.taking_to_tag == False and self.color == True:
+                
+                if ((r <= 0.23 and r > 0.18) or (l <= 0.23 and l >0.18)) and self.robotpos == 0 and self.taking_to_tag == False and self.color == True:
                     #stops
                     self.robotpos = 1
+
+                    # if self.next_tag < 3:
+                    #     rospy.sleep(0.2)
+
+
                     my_twist = Twist(linear=Vector3(0.0, 0, 0), angular=Vector3(0, 0, 0))
                     self.robot_movement_pub.publish(my_twist)
 
-                    #picks up dumbell
-                    # arm_joint_goal = [math.radians(min(r, l)), math.radians(20.0), 0.0, 0.0]
-                    # self.move_group_arm.go(arm_joint_goal)
-                    # self.move_group_arm.stop()
-                    # rospy.sleep(5)
-
-                    # gripper_joint_goal = [-0.01, 0.01]
-                    # self.move_group_gripper.go(gripper_joint_goal, wait=True)
-                    # self.move_group_gripper.stop()
+                    
 
 
 
@@ -443,7 +438,8 @@ class ExecuteAction(object):
 
                     if self.next_tag < 3:
                         #picks up dumbell
-                        arm_joint_goal = [0, math.radians(-5.0), 0.0, math.radians(5)]
+
+                        arm_joint_goal = [0, math.radians(5.0), 0.0, math.radians(-5)]
                         self.move_group_arm.go(arm_joint_goal)
                         self.move_group_arm.stop()
                         rospy.sleep(7)
