@@ -25,7 +25,7 @@ The new algorithm we explored is the minimax algorithm. It is a useful algorithm
 Terminals:
 1. roscore
 2. ssh into robot, set_ip and bringup
-3. bringup_cam
+3. ssh into robot, set_ip and bringup_cam
 4. rosrun image_transport republish compressed in:=raspicam_node/image raw out:=camera/rgb/image_raw
 5. roslaunch turtlebot3_manipulation_bringup turtlebot3_manipulation_bringup.launch
 6. roslaunch turtlebot3_manipulation_moveit_config move_group.launch
