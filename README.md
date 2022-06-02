@@ -51,6 +51,6 @@ Terminals:
 
 ## Videos:
 
-![Alt Text](https://github.com/zk794/robot_tic_tac_toe/blob/main/tic1.gif)
+![Alt Text](https://github.com/zk794/robot_tic_tac_toe/blob/master/tic1.gif)
 
-![Alt Text](https://github.com/zk794/robot_tic_tac_toe/blob/main/tic2.gif)
+![Alt Text](https://github.com/zk794/robot_tic_tac_toe/blob/master/tic2.gif)
