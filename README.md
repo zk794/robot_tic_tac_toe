@@ -47,3 +47,10 @@ Terminals:
 
 - We were able to split the work pretty effectively while still helping each other and communicating.
 - We found it important to be flexible in our plans; if we had stuck with our original design instead of modifying the board as we went, it would have made it far more difficult for us to have a working product. We had to consider both the robot's and our own limitatations.
+
+
+## Videos:
+
+![Alt Text](https://github.com/zk794/robot_tic_tac_toe/blob/main/tic1.gif)
+
+![Alt Text](https://github.com/zk794/robot_tic_tac_toe/blob/main/tic2.gif)
